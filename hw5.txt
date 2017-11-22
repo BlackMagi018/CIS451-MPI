@@ -74,7 +74,7 @@ int main(int argc, char *argv[]) {
 
   MPI_Status status;
   int myRank;
-  int numProcesses
+  int numProcesses;
   
   int n;
   int *array;
@@ -88,68 +88,79 @@ int main(int argc, char *argv[]) {
   
   if(myRank == 0){
   scanf("%d",&n);
-
   printf("The value of n is %d\n",n);
+
   array = (int *) malloc (n * sizeof(int));
+
   for(int i = 0;i < n;i++) {
     scanf("%d",&array[i]);
   }
+
   printf("The read values are: \n");
+
   for(int i = 0;i < n;i++) {
     printf("%d ",array[i]);
   }
-  printf("\n");
 
+  printf("\n");
+}
+
+  MPI_Bcast(&n,1,MPI_INT,0,MPI_COMM_WORLD);
+
+  
+  if (myRank != 0) {
+	array = (int *) malloc (n * sizeof(int));
+  }
+
+  MPI_Bcast(array,n,MPI_INT,0,MPI_COMM_WORLD);
+  
+  double start = MPI_Wtime();
+  int solutionFound = 0;
+  int solution = -1;
+  int results;
+  
   unsigned int nPartitions = 1;
   for(int i = 0;i < n;i++) {
     nPartitions = nPartitions * 2;
   }
+  
   // printf("The number of possible partitions is: %d\n",nPartitions);
   // Only half of all possible partitions need be examined
   // The second half is symmetrical to the first half
   nPartitions = nPartitions / 2;
-  }
-	if (myRank != 0) {
-		array = (int *) malloc (n * sizeof(int));
-	}
-  MPI_Bcast(array,n,MPI_INT,0,MPI_COMM_WORLD);
-  
-  int solutionFound = 0;
-  int solution = -1;
-  
+
   // Every node will work on a different portion of the
   // array of primes 
   int portionEachNode = n / numProcesses;
-  
   int initialN = portionEachNode * myRank;
   int finalN;
+
   if (myRank != (numProcesses-1)) {
       finalN = initialN + portionEachNode;
     }
     else {
-      finalN = n;
+      finalN = nPartitions;
     }
+
   for(unsigned int i = initialN;i < finalN;i++) {
     if (evaluatePartition( i,  n, array) == 1) {
       solutionFound = 1;
       solution = i;
+      printResults(solution, n, array);
+      break;
     }
   }
+ 
   
-  if (myRank == 0) {
-		solutionFounds = (int *) malloc (n * sizeof(int));
-		solutions = (int *) malloc (n * sizeof(int));
-	}
+  MPI_Reduce(&solutionFound,&results,1,MPI_INT,MPI_MAX,0,MPI_COMM_WORLD);  
+  double elapsed = MPI_Wtime() - start;
+  MPI_Finalize();
   
-  MPI_Gather(&solutionFound,1,MPI_INT,solutionFounds,n,MPI_INT,0,MPI_COMM_WORLD);
-  MPI_Gather(&solution,1,MPI_INT,solutions,n,MPI_INT,0,MPI_COMM_WORLD);
-  
-  if (solutionFound) {
-    printResults(solution, n, array);
-  }
-  else {
-    printf("No solution was found.");
+if (myRank == 0) {
+    if (!results) {
+      printf("A solution was not found.\n");
+    }
+    printf("Elapsed Compute Time: %f seconds.\n", elapsed);
   }
   return 0;
-}
- 
+} 
